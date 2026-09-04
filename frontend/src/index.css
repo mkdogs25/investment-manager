@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-50: #f8fafc;
+  --color-ink-100: #f1f5f9;
+  --color-ink-200: #e2e8f0;
+  --color-ink-300: #cbd5e1;
+  --color-ink-400: #94a3b8;
+  --color-ink-500: #64748b;
+  --color-ink-600: #475569;
+  --color-ink-700: #334155;
+  --color-ink-800: #1e293b;
+  --color-ink-900: #0f172a;
+
+  --color-brand-50: #eef4fb;
+  --color-brand-100: #d7e5f4;
+  --color-brand-500: #2a5c96;
+  --color-brand-600: #1e3a5f;
+  --color-brand-700: #172d4a;
+
+  --color-teal-accent: #0f766e;
+  --color-gain: #15803d;
+  --color-loss: #b91c1c;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background:
+    radial-gradient(1200px 480px at 12% -8%, #e8f0f9 0%, transparent 60%),
+    radial-gradient(900px 420px at 92% 0%, #e6f4f1 0%, transparent 55%),
+    var(--color-ink-50);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Keyboard focus is always visible, including inside the combobox listbox. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
