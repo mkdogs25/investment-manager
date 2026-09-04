@@ -5,7 +5,11 @@ import type {
   SchemeSearchResult,
 } from '../types'
 
-const BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
+/** Backend base URL. Same-origin '/api' locally (via the dev proxy); an
+ *  absolute URL when the frontend is hosted separately, e.g. on GitHub Pages. */
+export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
+
+const BASE = API_BASE
 
 export class ApiError extends Error {
   constructor(
@@ -52,6 +56,19 @@ async function readError(response: Response): Promise<string> {
   if (response.status === 504) return 'The data provider timed out. Try again shortly.'
   if (response.status === 503) return 'The data provider is currently unavailable.'
   return `Request failed (HTTP ${response.status}).`
+}
+
+export interface HealthResponse {
+  status: string
+  provider: string
+  available_providers: string[]
+  server_date: string
+}
+
+/** Checks that the backend is reachable, so the UI can explain an unconfigured
+ *  or offline API before the user starts typing. */
+export function checkHealth(signal?: AbortSignal): Promise<HealthResponse> {
+  return request<HealthResponse>('/health', { signal })
 }
 
 export function searchSchemes(

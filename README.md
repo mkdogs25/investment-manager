@@ -126,6 +126,59 @@ backend only; no key or configuration is ever shipped to the browser.
 
 ---
 
+## Deploying the frontend to GitHub Pages
+
+`.github/workflows/deploy-pages.yml` builds the frontend and publishes it to GitHub
+Pages on every push to the default branch (and on manual dispatch).
+
+**GitHub Pages serves static files only.** It cannot run the FastAPI backend, which is
+what retrieves scheme data and builds the `.xlsx` workbook with `openpyxl`. So the
+published site needs a backend hosted somewhere else — any host that runs a Python
+process (Fly.io, Render, Railway, a VPS, a container platform) works.
+
+### One-time setup
+
+1. **Enable Pages.** Settings → Pages → Build and deployment → Source: **GitHub Actions**.
+2. **Host the backend** and note its public URL.
+3. **Point the site at it.** Settings → Secrets and variables → Actions → Variables →
+   New repository variable, named `API_BASE_URL`, set to the backend's API root
+   including the `/api` suffix, e.g. `https://mf-analyzer.fly.dev/api`.
+4. **Allow the Pages origin on the backend**, otherwise the browser blocks the requests:
+
+   ```bash
+   MF_CORS_ORIGINS=https://<owner>.github.io
+   ```
+
+5. Re-run the workflow (Actions → Deploy frontend to GitHub Pages → Run workflow).
+
+The site is then served at `https://<owner>.github.io/<repo>/`.
+
+If `API_BASE_URL` is not set, the site still builds and deploys — it just shows a notice
+explaining that the backend is unreachable, rather than failing silently when the user
+searches for a scheme.
+
+### Build-time variables
+
+| Variable | Purpose | Default |
+| -------- | ------- | ------- |
+| `VITE_API_BASE_URL` | Absolute URL of the backend API | `/api` (same origin) |
+| `VITE_BASE_PATH` | Public base path of the site | `/` (the workflow sets `/<repo>/`) |
+
+Neither carries a secret: both are baked into the published JavaScript, which is why all
+provider communication and any real configuration stay on the backend.
+
+### Hosting the whole app together instead
+
+If you would rather serve the frontend and backend from one origin, build the frontend
+with the default base path and let the backend serve `frontend/dist` as static files. No
+CORS configuration is needed, and `/api` resolves on the same origin.
+
+```bash
+cd frontend && npm run build
+```
+
+---
+
 ## Tests
 
 ```bash

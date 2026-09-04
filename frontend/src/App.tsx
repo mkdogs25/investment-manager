@@ -4,6 +4,7 @@ import { InvestorForm } from './components/InvestorForm'
 import { PortfolioTable } from './components/PortfolioTable'
 import { PortfolioPreview } from './components/PortfolioPreview'
 import { AnalysisPanel } from './components/AnalysisPanel'
+import { BackendNotice } from './components/BackendNotice'
 import { Callout } from './components/ui'
 import { ApiError, analysePortfolio, downloadReport } from './services/api'
 import { buildPayload, emptyRow, validatePortfolio } from './services/validation'
@@ -101,6 +102,8 @@ export default function App() {
       </header>
 
       <main className="mx-auto flex max-w-6xl flex-col gap-6 px-5 py-7 sm:px-8 sm:py-9">
+        <BackendNotice />
+
         <InvestorForm
           age={age}
           riskProfile={riskProfile}
