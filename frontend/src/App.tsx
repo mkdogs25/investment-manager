@@ -4,19 +4,11 @@ import { InvestorForm } from './components/InvestorForm'
 import { PortfolioTable } from './components/PortfolioTable'
 import { PortfolioPreview } from './components/PortfolioPreview'
 import { AnalysisPanel } from './components/AnalysisPanel'
-import { BackendNotice } from './components/BackendNotice'
 import { Callout } from './components/ui'
-import { ApiError, analysePortfolio, downloadReport } from './services/api'
+import { analyse, describeError, downloadReport, providerName } from './services/portfolio'
 import { buildPayload, emptyRow, validatePortfolio } from './services/validation'
-import type { AnalysisResponse, FundRow, RiskProfile } from './types'
-
-const DISCLAIMER =
-  'This tool is for informational and educational purposes only and does not ' +
-  'constitute financial advice or a recommendation to buy, sell, or hold any ' +
-  'investment. Historical performance does not guarantee future results. Data may ' +
-  'be delayed, incomplete, or subject to errors. Verify important information with ' +
-  'the relevant fund house, AMFI, and other official sources before making ' +
-  'investment decisions.'
+import { DISCLAIMER } from './data/analysis'
+import type { AnalysisReport, FundRow, RiskProfile } from './types'
 
 export default function App() {
   const [age, setAge] = useState('')
@@ -26,15 +18,15 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [report, setReport] = useState<AnalysisResponse | null>(null)
+  const [report, setReport] = useState<AnalysisReport | null>(null)
 
   const issues = useMemo(() => validatePortfolio(age, rows), [age, rows])
   const visibleIssues = submitted ? issues : []
 
   /**
-   * Patches one row functionally so that several updates fired in the same
-   * tick (selecting a scheme sets both the scheme and its name) compose
-   * instead of overwriting each other.
+   * Patches one row functionally so that several updates fired in the same tick
+   * (selecting a scheme sets both the scheme and its name) compose instead of
+   * overwriting each other.
    */
   function patchRow(id: string, patch: Partial<FundRow>) {
     setRows((current) =>
@@ -56,22 +48,16 @@ export default function App() {
       return
     }
 
-    const payload = buildPayload(age, riskProfile, rows)
     setBusy(true)
     try {
-      setProgress('Retrieving scheme data and NAV history…')
-      const analysis = await analysePortfolio(payload)
+      setProgress(`Retrieving scheme data and NAV history from ${providerName()}…`)
+      const analysis = await analyse(buildPayload(age, riskProfile, rows))
       setReport(analysis)
 
       setProgress('Building the Excel workbook…')
-      await downloadReport(payload)
-      setProgress(null)
+      await downloadReport(analysis)
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : 'Something went wrong while generating the report.',
-      )
+      setError(describeError(err))
     } finally {
       setBusy(false)
       setProgress(null)
@@ -96,14 +82,12 @@ export default function App() {
             </div>
           </div>
           <p className="hidden rounded-full border border-ink-200 bg-white px-3 py-1.5 text-xs font-medium text-ink-500 lg:block">
-            Scheme data from AMFI-derived public APIs
+            Runs entirely in your browser · data from {providerName()}
           </p>
         </div>
       </header>
 
       <main className="mx-auto flex max-w-6xl flex-col gap-6 px-5 py-7 sm:px-8 sm:py-9">
-        <BackendNotice />
-
         <InvestorForm
           age={age}
           riskProfile={riskProfile}
@@ -135,12 +119,18 @@ export default function App() {
           {report?.disclaimer ?? DISCLAIMER}
         </Callout>
 
-        <footer className="flex items-start gap-2 pb-6 text-xs text-ink-500">
-          <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          <p>
-            The Fund Analysis Score shown here and in the workbook is calculated by this
-            application from public data. It is not a rating from Value Research or any
-            other organisation. The full methodology is documented in the Excel report.
+        <footer className="flex flex-col gap-2 pb-6 text-xs text-ink-500">
+          <p className="flex items-start gap-2">
+            <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+            <span>
+              The Fund Analysis Score shown here and in the workbook is calculated by this
+              application from public data. It is not a rating from Value Research or any
+              other organisation. The full methodology is documented in the Excel report.
+            </span>
+          </p>
+          <p className="pl-5.5">
+            Your portfolio figures never leave this page: scheme lookups, all calculations
+            and the workbook itself are produced locally in your browser.
           </p>
         </footer>
       </main>

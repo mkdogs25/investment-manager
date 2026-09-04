@@ -2,7 +2,7 @@ import { Copy, Trash2 } from 'lucide-react'
 import { FundSearchInput } from './FundSearchInput'
 import { Field, inputClass, inputErrorClass } from './ui'
 import { formatCurrency, parseAmount, todayIso } from '../services/format'
-import type { FundRow, SchemeSearchResult, ValidationIssue } from '../types'
+import type { FundRow, SchemeSummary, ValidationIssue } from '../types'
 
 interface Props {
   row: FundRow
@@ -78,7 +78,7 @@ export function FundInput({
             scheme={row.scheme}
             invalid={Boolean(errorFor('fundName'))}
             onChange={(fundName) => set({ fundName })}
-            onSelect={(scheme: SchemeSearchResult | null) => set({ scheme })}
+            onSelect={(scheme: SchemeSummary | null) => set({ scheme })}
           />
         </Field>
 

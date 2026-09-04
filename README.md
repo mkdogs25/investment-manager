@@ -4,6 +4,12 @@ Enter an Indian mutual fund portfolio, identify each scheme exactly against a pu
 AMFI-derived API, and export a professionally formatted five-sheet `.xlsx` report with
 fund-level and portfolio-level analysis.
 
+**Live: https://mkdogs25.github.io/investment-manager/**
+
+The deployed app runs entirely in your browser — it calls the public NAV API directly and
+builds the spreadsheet client-side, so there is no server to host and nothing to
+configure. Your portfolio figures never leave the page.
+
 > **This tool is for informational and educational purposes only and does not constitute
 > financial advice or a recommendation to buy, sell, or hold any investment. Historical
 > performance does not guarantee future results. Data may be delayed, incomplete, or
@@ -19,9 +25,9 @@ fund-level and portfolio-level analysis.
    identified by **scheme code** rather than by fuzzy text matching.
 3. Enter the investment date, amount invested and current value for each fund.
 4. Review live portfolio totals.
-5. Generate the Excel report. The backend retrieves scheme metadata and full NAV history
-   from [MFapi.in](https://www.mfapi.in/docs/), computes returns and risk metrics, and
-   builds the workbook with `openpyxl`.
+5. Generate the Excel report: scheme metadata and full NAV history come from
+   [MFapi.in](https://www.mfapi.in/docs/), returns and risk metrics are computed, and the
+   workbook is written with ExcelJS.
 
 ### The workbook
 
@@ -37,66 +43,100 @@ fund-level and portfolio-level analysis.
 
 ## Architecture
 
+There are **two independent implementations** of the same analysis engine:
+
+| | Runs | Spreadsheet writer | Used by |
+| - | - | - | - |
+| `frontend/src/data/` | In the browser | ExcelJS | The deployed GitHub Pages app |
+| `backend/` | Python / FastAPI | openpyxl | Optional self-hosted deployment |
+
+The browser engine is what ships. The Python backend is kept as a working alternative for
+anyone who would rather not have the browser call a third-party API directly, and as a
+second reference for the formulae.
+
+> **A caveat worth knowing:** two implementations of the same maths can drift. Both are
+> covered by equivalent test suites (113 tests each) asserting the same expected values,
+> which is what keeps them honest. Change a formula in one and you must change it in the
+> other.
+
 ```
-Frontend (React + TypeScript + Tailwind + Lucide)
-   ↓  /api
-Backend API (FastAPI)
+Browser
    ↓
-Fund / NAV services  →  calculations, scoring, excel_generator   (provider-agnostic)
+UI components  →  services/portfolio.ts   (thin adapter)
    ↓
-Data provider
-   ├── MFapi.in
-   └── future provider (register in providers/registry.py)
+data/analysis.ts  →  calculations, scoring, excel   (provider-agnostic)
+   ↓
+data/providers/
+   ├── mfapi.ts        MFapi.in, called directly by the browser
+   └── future provider registered in providers/registry.ts
 ```
 
 ```
-backend/
-├── app/
-│   ├── main.py                    FastAPI app, CORS, lifespan
-│   ├── config.py                  env-driven settings and scoring weights
-│   ├── api/routes.py              HTTP endpoints
-│   ├── models/schemas.py          request/response models and validation
-│   ├── providers/
-│   │   ├── base.py                FundDataProvider interface + error taxonomy
-│   │   ├── mfapi.py               MFapi.in implementation
-│   │   └── registry.py            provider selection and swapping
-│   └── services/
-│       ├── calculations.py        pure financial maths (no I/O)
-│       ├── scoring.py             the transparent Fund Analysis Score
-│       ├── nav_service.py         NAV history → risk/return metrics
-│       ├── fund_service.py        search and scheme detail
-│       ├── analysis_service.py    portfolio orchestration, per-fund fault tolerance
-│       └── excel_generator.py     the .xlsx workbook
-└── tests/                         113 tests, no network access
 frontend/
 └── src/
-    ├── components/                InvestorForm, FundInput, FundSearchInput,
-    │                              PortfolioTable, PortfolioPreview, AnalysisPanel
-    ├── services/                  api client, formatters, validation
+    ├── components/          InvestorForm, FundInput, FundSearchInput,
+    │                        PortfolioTable, PortfolioPreview, AnalysisPanel
+    ├── data/
+    │   ├── calculations.ts  pure financial maths (no I/O)
+    │   ├── scoring.ts       the transparent Fund Analysis Score
+    │   ├── analysis.ts      orchestration, per-fund fault tolerance
+    │   ├── excel.ts         the .xlsx workbook (ExcelJS)
+    │   ├── chart.ts         allocation doughnut rendered to PNG
+    │   ├── providers/       provider interface, MFapi.in, registry
+    │   └── __tests__/       113 tests, no network access
+    ├── services/            adapter, formatters, validation
     └── types/
+
+backend/                     optional; same engine in Python
+├── app/
+│   ├── main.py              FastAPI app, CORS, lifespan
+│   ├── config.py            env-driven settings and scoring weights
+│   ├── api/routes.py        HTTP endpoints
+│   ├── models/schemas.py    request/response models and validation
+│   ├── providers/           FundDataProvider interface, MFapi.in, registry
+│   └── services/            calculations, scoring, nav, fund, analysis, excel
+└── tests/                   113 tests, no network access
 ```
 
-Calculations are deliberately independent of the data provider, so they are tested on
-their own and a second provider can be added without touching them.
+Calculations are deliberately independent of the data provider in both implementations,
+so they are tested on their own and a second provider can be added without touching them.
 
 ### Adding another provider
 
-Implement `FundDataProvider` (`search_schemes` and `get_scheme`), then register it:
+Implement the `FundDataProvider` interface (`searchSchemes` and `getScheme`), then
+register it:
 
-```python
-# app/providers/registry.py
-register_provider("myprovider", MyProvider)
+```ts
+// frontend/src/data/providers/registry.ts
+registerProvider('myprovider', () => new MyProvider())
 ```
 
-Select it with `MF_PROVIDER=myprovider`. Nothing above the provider layer changes.
+Select it with `VITE_MF_PROVIDER=myprovider`. Nothing above the provider layer changes.
 
----
+### If the NAV API stops allowing browser calls
+
+The app calls MFapi.in directly from the page, which depends on that API returning
+permissive CORS headers. If that ever changes, the app says so explicitly rather than
+showing an empty search, and `VITE_MFAPI_BASE_URL` repoints the data layer at a
+pass-through proxy you control — it must mirror MFapi.in's paths and response shape.
+Failing that, the Python backend under `backend/` is the fallback.
 
 ## Running it
 
-Requires Python 3.11+ and Node 18+.
+Requires Node 18+.
 
-### Backend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open <http://localhost:5173>. That is the whole app — no backend needed.
+
+### The optional Python backend
+
+Only needed if you want the data retrieval and workbook generation to happen on a server
+instead of in the browser. Requires Python 3.11+.
 
 ```bash
 cd backend
@@ -105,99 +145,49 @@ python3 -m venv .venv
 .venv/bin/python -m uvicorn app.main:app --reload --port 8000
 ```
 
-API docs at <http://127.0.0.1:8000/docs>.
+API docs at <http://127.0.0.1:8000/docs>. It exposes scheme search, portfolio analysis
+and an `.xlsx` download endpoint. Copy `.env.example` to configure the provider, timeouts,
+cache TTLs, the Sharpe risk-free rate and CORS origins. Note that the frontend in this
+repo no longer calls it — wiring them together means restoring an HTTP client in
+`frontend/src/services/`.
 
-### Frontend
+## Deploying to GitHub Pages
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+`.github/workflows/deploy-pages.yml` tests, builds and publishes the frontend on every
+push to the default branch (and on manual dispatch). Because the app is self-contained,
+there is nothing to configure beyond enabling Pages once:
 
-Open <http://localhost:5173>. The dev server proxies `/api` to
-`http://127.0.0.1:8000` (override with `VITE_API_TARGET`).
-
-### Configuration
-
-Copy `.env.example` and export what you want to change — provider selection, timeouts,
-cache TTLs, the Sharpe risk-free rate, and CORS origins. All of it is read by the
-backend only; no key or configuration is ever shipped to the browser.
-
----
-
-## Deploying the frontend to GitHub Pages
-
-`.github/workflows/deploy-pages.yml` builds the frontend and publishes it to GitHub
-Pages on every push to the default branch (and on manual dispatch).
-
-**GitHub Pages serves static files only.** It cannot run the FastAPI backend, which is
-what retrieves scheme data and builds the `.xlsx` workbook with `openpyxl`. So the
-published site needs a backend hosted somewhere else — any host that runs a Python
-process (Fly.io, Render, Railway, a VPS, a container platform) works.
-
-### One-time setup
-
-1. **Enable Pages.** Settings → Pages → Build and deployment → Source: **GitHub Actions**.
-2. **Host the backend** and note its public URL.
-3. **Point the site at it.** Settings → Secrets and variables → Actions → Variables →
-   New repository variable, named `API_BASE_URL`, set to the backend's API root
-   including the `/api` suffix, e.g. `https://mf-analyzer.fly.dev/api`.
-4. **Allow the Pages origin on the backend**, otherwise the browser blocks the requests:
-
-   ```bash
-   MF_CORS_ORIGINS=https://<owner>.github.io
-   ```
-
-5. Re-run the workflow (Actions → Deploy frontend to GitHub Pages → Run workflow).
+**Settings → Pages → Build and deployment → Source: GitHub Actions.**
 
 The site is then served at `https://<owner>.github.io/<repo>/`.
-
-If `API_BASE_URL` is not set, the site still builds and deploys — it just shows a notice
-explaining that the backend is unreachable, rather than failing silently when the user
-searches for a scheme.
 
 ### Build-time variables
 
 | Variable | Purpose | Default |
 | -------- | ------- | ------- |
-| `VITE_API_BASE_URL` | Absolute URL of the backend API | `/api` (same origin) |
 | `VITE_BASE_PATH` | Public base path of the site | `/` (the workflow sets `/<repo>/`) |
+| `VITE_MF_PROVIDER` | Data provider key | `mfapi` |
+| `VITE_MFAPI_BASE_URL` | Override the NAV API endpoint | `https://api.mfapi.in` |
 
-Neither carries a secret: both are baked into the published JavaScript, which is why all
-provider communication and any real configuration stay on the backend.
-
-### Hosting the whole app together instead
-
-If you would rather serve the frontend and backend from one origin, build the frontend
-with the default base path and let the backend serve `frontend/dist` as static files. No
-CORS configuration is needed, and `/api` resolves on the same origin.
-
-```bash
-cd frontend && npm run build
-```
-
----
+None carries a secret — all three are baked into the published JavaScript. The app needs
+no credentials of any kind, because MFapi.in requires none.
 
 ## Tests
 
 ```bash
-cd backend
-.venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest
+cd frontend && npm test          # 113 tests, the deployed engine
+cd backend && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/python -m pytest
 ```
 
-Covers the calculations (CAGR, absolute return, holding period, allocation, totals,
-volatility, Sharpe, max drawdown, consistency), the Fund Score, the provider (search,
-exact scheme identification, NAV parsing, 404/429/5xx/timeout/malformed responses,
-retries, caching), fault tolerance when one fund fails, and the workbook (sheets present,
-formatting applied, values matching the API, missing data clearly labelled).
+Both suites cover the same ground and assert the same expected values: the calculations
+(CAGR, absolute return, holding period, allocation, totals, volatility, Sharpe, max
+drawdown, consistency), the Fund Score, the provider (search, exact scheme
+identification, NAV parsing, 404/429/5xx/timeout/malformed responses, caching, and — in
+the browser — a blocked cross-origin request), fault tolerance when one fund fails, and
+the workbook (all sheets present, formatting applied, values matching the analysis,
+missing data clearly labelled).
 
-Frontend typecheck and build:
-
-```bash
-cd frontend && npm run build
-```
+Neither suite touches the network.
 
 ---
 
@@ -212,6 +202,7 @@ ISIN, NAV history and latest NAV.
 
 **Not available** from MFapi.in today: expense ratio, AUM and benchmark. These render as
 `Data unavailable` rather than being estimated, and the Data Sources sheet records why.
+In practice this means the Fund Score runs on five of its six components.
 
 ### The Fund Analysis Score
 
@@ -241,3 +232,7 @@ is printed in the workbook.
   status of `✓ Data retrieved`, `⚠ Partial data` or `✕ Data unavailable`.
 - Only the provider's public API is used. No scraping, and no access control, CAPTCHA,
   rate limit, `robots.txt` or paywall is bypassed.
+- Nothing you enter is transmitted anywhere. The only outbound request is the scheme code
+  sent to the public NAV API; the analysis and the workbook are produced in your browser.
+- The allocation chart in the workbook is a rendered image, because ExcelJS cannot write
+  native Excel charts. Every number it depicts is also present as cells beside it.

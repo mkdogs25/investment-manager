@@ -1,8 +1,8 @@
 name: Deploy frontend to GitHub Pages
 
-# GitHub Pages serves static files only. This publishes the React frontend;
-# scheme search and report generation still need the FastAPI backend running
-# somewhere reachable, configured through the API_BASE_URL repository variable.
+# The app runs entirely in the browser: it calls the public NAV API directly and
+# builds the .xlsx client-side, so GitHub Pages hosting it is self-sufficient —
+# there is no backend to deploy and nothing to configure.
 
 on:
   push:
@@ -36,15 +36,15 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Test
+        working-directory: frontend
+        run: npm run test
+
       - name: Typecheck and build
         working-directory: frontend
         env:
           # Project sites are served from https://<owner>.github.io/<repo>/
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
-          # Absolute URL of the deployed backend, e.g. https://api.example.com/api.
-          # Set it under Settings → Secrets and variables → Actions → Variables.
-          # Left unset, the site builds and explains that the backend is unreachable.
-          VITE_API_BASE_URL: ${{ vars.API_BASE_URL }}
         run: npm run build
 
       - name: Add SPA and Jekyll fallbacks

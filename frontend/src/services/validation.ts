@@ -1,9 +1,4 @@
-import type {
-  FundRow,
-  PortfolioPayload,
-  RiskProfile,
-  ValidationIssue,
-} from '../types'
+import type { FundRow, PortfolioInput, RiskProfile, ValidationIssue } from '../types'
 import { parseAmount, todayIso } from './format'
 
 export const MIN_AGE = 18
@@ -38,7 +33,7 @@ export function duplicateRowIds(rows: FundRow[]): Set<string> {
   const seen = new Map<string, string>()
   const duplicates = new Set<string>()
   for (const row of rows) {
-    const key = row.scheme?.scheme_code ?? row.fundName.trim().toLowerCase()
+    const key = row.scheme?.schemeCode ?? row.fundName.trim().toLowerCase()
     if (!key) continue
     if (seen.has(key)) duplicates.add(row.id)
     else seen.set(key, row.id)
@@ -101,20 +96,36 @@ export function validatePortfolio(age: string, rows: FundRow[]): ValidationIssue
   return issues
 }
 
+/** Parses a YYYY-MM-DD input value as a local calendar date. */
+export function parseIsoDate(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim())
+  if (!match) return null
+  const [, year, month, day] = match
+  const date = new Date(Number(year), Number(month) - 1, Number(day))
+  if (
+    date.getFullYear() !== Number(year) ||
+    date.getMonth() !== Number(month) - 1 ||
+    date.getDate() !== Number(day)
+  ) {
+    return null
+  }
+  return date
+}
+
 export function buildPayload(
   age: string,
   riskProfile: RiskProfile,
   rows: FundRow[],
-): PortfolioPayload {
+): PortfolioInput {
   return {
-    investor_age: Number(age),
-    risk_profile: riskProfile,
+    investorAge: Number(age),
+    riskProfile,
     funds: rows.map((row) => ({
-      scheme_code: row.scheme?.scheme_code ?? null,
-      fund_name: row.scheme?.scheme_name ?? row.fundName.trim(),
-      investment_date: row.investmentDate || null,
-      amount_invested: parseAmount(row.amountInvested) ?? 0,
-      current_amount: parseAmount(row.currentAmount) ?? 0,
+      schemeCode: row.scheme?.schemeCode ?? null,
+      fundName: row.scheme?.schemeName ?? row.fundName.trim(),
+      investmentDate: row.investmentDate ? parseIsoDate(row.investmentDate) : null,
+      amountInvested: parseAmount(row.amountInvested) ?? 0,
+      currentAmount: parseAmount(row.currentAmount) ?? 0,
     })),
   }
 }

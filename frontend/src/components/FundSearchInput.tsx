@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, Search, X } from 'lucide-react'
-import { ApiError, searchSchemes } from '../services/api'
-import type { SchemeSearchResult } from '../types'
+import { describeError, searchSchemes } from '../services/portfolio'
+import type { SchemeSummary } from '../types'
 import { Spinner, inputClass, inputErrorClass } from './ui'
 
 const MIN_QUERY = 2
@@ -9,11 +9,11 @@ const DEBOUNCE_MS = 280
 
 interface Props {
   value: string
-  scheme: SchemeSearchResult | null
+  scheme: SchemeSummary | null
   invalid?: boolean
   describedBy?: string
   onChange: (name: string) => void
-  onSelect: (scheme: SchemeSearchResult | null) => void
+  onSelect: (scheme: SchemeSummary | null) => void
 }
 
 /**
@@ -31,7 +31,7 @@ export function FundSearchInput({
   onChange,
   onSelect,
 }: Props) {
-  const [results, setResults] = useState<SchemeSearchResult[]>([])
+  const [results, setResults] = useState<SchemeSummary[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -64,11 +64,7 @@ export function FundSearchInput({
       } catch (err) {
         if (controller.signal.aborted) return
         setResults([])
-        setError(
-          err instanceof ApiError
-            ? err.message
-            : 'Fund search is unavailable right now.',
-        )
+        setError(describeError(err))
         setOpen(true)
       } finally {
         if (!controller.signal.aborted) setLoading(false)
@@ -106,9 +102,9 @@ export function FundSearchInput({
     return null
   }, [loading, error, shouldSearch, results.length])
 
-  function select(result: SchemeSearchResult) {
+  function select(result: SchemeSummary) {
     onSelect(result)
-    onChange(result.scheme_name)
+    onChange(result.schemeName)
     setOpen(false)
     setResults([])
     setActiveIndex(-1)
@@ -193,11 +189,11 @@ export function FundSearchInput({
         <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-600">
           <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800">
             <Check className="size-3" aria-hidden="true" />
-            Scheme {scheme.scheme_code}
+            Scheme {scheme.schemeCode}
           </span>
-          {scheme.fund_house ? <span>{scheme.fund_house}</span> : null}
-          {scheme.scheme_category ? (
-            <span className="text-ink-400">· {scheme.scheme_category}</span>
+          {scheme.fundHouse ? <span>{scheme.fundHouse}</span> : null}
+          {scheme.schemeCategory ? (
+            <span className="text-ink-400">· {scheme.schemeCategory}</span>
           ) : null}
         </p>
       ) : null}
@@ -221,7 +217,7 @@ export function FundSearchInput({
           >
             {results.map((result, index) => (
               <li
-                key={result.scheme_code}
+                key={result.schemeCode}
                 id={`${listId}-option-${index}`}
                 data-index={index}
                 role="option"
@@ -236,13 +232,12 @@ export function FundSearchInput({
                 }}
               >
                 <p className="text-sm font-medium leading-snug text-ink-900">
-                  {result.scheme_name}
+                  {result.schemeName}
                 </p>
                 <p className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-ink-500">
-                  <span className="font-mono">{result.scheme_code}</span>
-                  {result.fund_house ? <span>· {result.fund_house}</span> : null}
-                  {result.plan ? <span>· {result.plan}</span> : null}
-                  {result.option ? <span>· {result.option}</span> : null}
+                  <span className="font-mono">{result.schemeCode}</span>
+                  {result.fundHouse ? <span>· {result.fundHouse}</span> : null}
+                  {result.schemeCategory ? <span>· {result.schemeCategory}</span> : null}
                 </p>
               </li>
             ))}
